@@ -4,13 +4,14 @@ from sklearn.model_selection import train_test_split
 
 
 class neural_net:
-  def __init__(self, iters, N, m, value, output_actvn):
+  def __init__(self, iters, N, m, value, output_actvn, perturb):
     self.m = m
+
     self.X, self.Y = self.generate_data(1, N)
     self.train_test()
     #self.view_points(self.X, self.Y)
     self.define_structure(self.X_train, self.y_train)
-    self.initialize_parameters(self.input_unit, self.hidden_unit, self.output_unit, value)
+    self.initialize_parameters(self.input_unit, self.hidden_unit, self.output_unit, value, perturb)
 
     W1 = self.parameters['W1']
     b1 = self.parameters['b1']
@@ -18,15 +19,17 @@ class neural_net:
     b2 = self.parameters['b2']
 
     for i in range(0, iters):
-      A2, cache = self.forward_prop(self.X_train, self.parameters, "identity")
+      A2, cache = self.forward_prop(self.X_train, self.parameters, "tanh")
       #self.cross_entropy_cost(A2, self.Y, self.parameters)
       self.least_squares_error(A2, self.Y, N)
       self.back_prop(self.parameters, cache, self.X_train, self.Y)
       self.gradient_descent(self.parameters, self.grads)
-      if i%1 == 0:
+      if i%10 == 0:
         print("Cost after iteration %i: %f "%(i, self.cost))
-        print(self.grads.values())
+        #print(self.grads.values())
 
+    for k, v in self.grads.items():
+          print( k, v)
     prediction = self.prediction(self.parameters, self.X_train)
 
   def generate_data(self, x_roof, N):
@@ -74,10 +77,14 @@ class neural_net:
     print("The size of the output layer is:  = " + str(self.output_unit))    
 
   
-  def initialize_parameters(self, input_unit, hidden_unit, output_unit, value):
-    w1 = np.full((hidden_unit, input_unit), value)
+  def initialize_parameters(self, input_unit, hidden_unit, output_unit, value, perturb):
+    if (perturb==True):
+      w1 = np.array([[value + (i*0.01) + (j*0.01) for i in range(input_unit)] for j in range(hidden_unit)])
+      w2 = np.array([[value + (i*0.01) + (j*0.01) for i in range(hidden_unit)] for j in range(output_unit)])
+    else:
+      w1 = np.full((hidden_unit, input_unit), value)
+      w2 = np.full((output_unit, hidden_unit), value)
     b1 = np.zeros((hidden_unit,1))
-    w2 = np.full((output_unit, hidden_unit), value)
     b2 = np.zeros((output_unit,1))
     self.parameters = {"W1": w1,
                   "b1": b1,
@@ -101,7 +108,7 @@ class neural_net:
     if (output_actvn == "identity"):
       A2 = Z2
     elif (output_actvn == "tanh"):
-      A2 = tanh(Z2)
+      A2 = np.tanh(Z2)
     else:
       A2 = self.sigmoid(Z2)
     cache = {"Z1": Z1, "A1": A1,"Z2": Z2, "A2": A2}
@@ -164,7 +171,8 @@ if __name__ == "__main__":
   num_pts = 1
   m = 2 #number of hidden units in 1
   iters = 100  # number of iterations
-  neural_net(iters, num_pts, m, 0.25, None)
+  perturb = True#False # perturb weights for question 1b
+  neural_net(iters, num_pts, m, 0.25, None, perturb)
 
 
 
