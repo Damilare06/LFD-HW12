@@ -5,7 +5,7 @@ import random
 
 
 class neural_net:
-  def __init__(self, dataset, epochs, m, output_actvn=None, W_lambda=0.0):
+  def __init__(self, dataset, epochs, m, output_actvn=None, lambd=0.0):
     self.m = m
     loss_history, digit1, digitNot1 = [], [], []
     self.vW1 = self.vW2 = self.vb1 = self.vb2 = 0
@@ -19,8 +19,8 @@ class neural_net:
       #E_in = []
       #self.dW1 = self.dW2 = self.db1 = self.db2 = 0
       A2, cache = self.forward_prop(self.X_train, self.parameters, False, output_actvn)
-      self.least_squares_error(A2, self.y_train)
-      self.back_prop(self.parameters, cache, self.X_train, self.y_train)
+      self.least_squares_error(A2, self.y_train, lambd)
+      self.back_prop(self.parameters, cache, self.X_train, self.y_train, lambd)
       self.gradient_descent(self.parameters, self.grads)
       #self.adapt_gradient(self.grads)
       #self.adapt_descent()
@@ -34,7 +34,7 @@ class neural_net:
 
     pred_train = self.prediction(self.parameters, self.X_train)
 
-    self.least_squares_error(A2, self.y_train)
+    self.least_squares_error(A2, self.y_train, lambd)
     xvalues = self.check_predictions(pred_train)
     digit1, digitNot1 = self.analyse_data(self.train_data)
     self.plot_decision(digit1, digitNot1, xvalues)
@@ -94,31 +94,46 @@ class neural_net:
       A2 = self.sigmoid(Z2)
     if (pred):
       A2 = np.sign(Z2)
+    assert(A2.shape == (1, X.shape[1]))
 
     cache = {"Z1": Z1, "A1": A1,"Z2": Z2, "A2": A2}
     return A2, cache
 
 
-  def least_squares_error(self, A2, Y):
+  def least_squares_error(self, A2, Y, lambd):
+    L2_reg_cost = 0
+    W1 = self.parameters["W1"]
+    W2 = self.parameters["W2"]
     N = Y.shape[1]
     error = np.sum((A2 - Y)**2)
     error  = error/(4 * N)
-    self.cost = float(np.squeeze(error))
+
+    # Compute L2 regularization cost
+    if(lambd > 0.0):
+      lambd = lambd/N
+      L2_reg_cost = (np.sum(np.square(W1)) + np.sum(np.square(W2)))*(lambd/(2* self.m))
+
+    self.cost = float(np.squeeze(error + L2_reg_cost))
     
 
-  def back_prop(self, params, cache, X, Y):
+  def back_prop(self, params, cache, X, Y, lambd):
     m = self.m
+    if lambd > 0.0:
+      lambd = lambd / Y.shape[1]
+    else:
+      lambd = 0.0
+
     W1 = params['W1']
     W2 = params['W2']
     A1 = cache['A1']
     A2 = cache['A2']
 
     self.dZ2 = A2 - Y
-    self.dW2 = (1/m) * np.dot(self.dZ2, A1.T)
-    self.db2 = (1/m) * np.sum(self.dZ2, axis=1, keepdims=True)
+    self.dW2 = (1.0/m) * np.dot(self.dZ2, A1.T) + (lambd/m)*W2
+    self.db2 = (1.0/m) * np.sum(self.dZ2, axis=1, keepdims=True)
     self.dZ1 = np.multiply(np.dot(W2.T, self.dZ2), 1 - np.power(A1, 2))
-    self.dW1 = (1/m) * np.dot(self.dZ1, X.T)
-    self.db1 = (1/m) * np.sum(self.dZ1, axis=1, keepdims=True)
+    self.dW1 = (1.0/m) * np.dot(self.dZ1, X.T) + (lambd/m)*W1
+    self.db1 = (1.0/m) * np.sum(self.dZ1, axis=1, keepdims=True)
 
     self.grads = {"dW1": self.dW1, "db1": self.db1, "dW2": self.dW2,"db2": self.db2}
     
@@ -294,13 +309,14 @@ if __name__ == "__main__":
   m = 10 #number of hidden units in 1
   epochs = 2000#0000  # number of iterations
 
-  # Y values are the first index of the dataset 
+
+######################## Question 2a ############################
   neural_net(data_set, epochs, m)#, "linear")
 
 ######################## Question 2b ############################
 
 
-#  neural_net(data_set, epochs, m, "linear", 0.01)
+  neural_net(data_set, epochs, m, lambd=0.01)
 
 
 
