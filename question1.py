@@ -65,7 +65,7 @@ class neural_net:
     print ('Train X Shape: ', self.X_train.shape)
     print ('Train Y Shape: ', self.y_train.shape)
     print ('I have m = %d training examples!' % (self.X_train.shape[1]))
-    print ('\nTest X Shape: ', self.X_test.shape)    
+    print ('Test X Shape: ', self.X_test.shape)    
 
 
   def define_structure(self, X, Y):
@@ -96,7 +96,6 @@ class neural_net:
     return 1/(1+ np.exp(-z))
 
   def forward_prop(self, X, params, output_actvn=None):
-    #print(params.values())
     W1 = params['W1']
     b1 = params['b1']
     W2 = params['W2']
@@ -173,23 +172,3 @@ if __name__ == "__main__":
   iters = 100  # number of iterations
   perturb = True#False # perturb weights for question 1b
   neural_net(iters, num_pts, m, 0.25, None, perturb)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

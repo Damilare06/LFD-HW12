@@ -5,38 +5,41 @@ import random
 
 
 class neural_net:
-  def __init__(self, dataset, epochs, m, value, output_actvn):
+  def __init__(self, dataset, epochs, m, output_actvn=None, W_lambda=0.0):
     self.m = m
-    batch_size = 10
-    loss_history = []
-    self.W1 = self.W2 = self.b1 = self.b2 = 0
+    loss_history, digit1, digitNot1 = [], [], []
     self.vW1 = self.vW2 = self.vb1 = self.vb2 = 0
 
     self.split_data(dataset)
     self.view_shapes()
     self.define_structure(self.X_train, self.y_train)
-    self.initialize_parameters(self.input_unit, self.hidden_unit, self.output_unit, value)
+    self.initialize_parameters(self.input_unit, self.hidden_unit, self.output_unit)
 
     for epoch in range(0, epochs):
-      E_in = []
-      self.dW1 = self.dW2 = self.db1 = self.db2 = 0
+      #E_in = []
+      #self.dW1 = self.dW2 = self.db1 = self.db2 = 0
+      A2, cache = self.forward_prop(self.X_train, self.parameters, False, output_actvn)
+      self.least_squares_error(A2, self.y_train)
+      self.back_prop(self.parameters, cache, self.X_train, self.y_train)
+      self.gradient_descent(self.parameters, self.grads)
+      #self.adapt_gradient(self.grads)
+      #self.adapt_descent()
+      loss_history.append(self.cost)
 
-      for (X_batch, y_batch) in self.next_batch(self.X_train, self.y_train, batch_size):
-        A2, cache = self.forward_prop(X_batch, self.parameters, False, output_actvn)
-        self.least_squares_error(A2, X_batch, y_batch)
-        self.back_prop(self.parameters, cache, X_batch, y_batch)
-        self.adapt_gradient(self.grads)
-        E_in.append(self.cost)
-
-        if epoch%100000 == 0:
+      if epoch%500 == 0:
           print("Cost after iteration %i: %f "%(epoch, self.cost))
 
-      self.adapt_descent()
-      loss_history.append(np.average(E_in)) 
-      #for k, v in self.grads.items():
-      #      print( k, v)
-    prediction = self.prediction(self.parameters, self.X_train)
-    self.plot_decision_boundary(epochs, loss_history)
+    #val = self.prediction(self.parameters, np.array([[0.5, 0.5],]).T)
+    #print(val)
+
+    pred_train = self.prediction(self.parameters, self.X_train)
+
+    self.least_squares_error(A2, self.y_train)
+    xvalues = self.check_predictions(pred_train)
+    digit1, digitNot1 = self.analyse_data(self.train_data)
+    self.plot_decision(digit1, digitNot1, xvalues)
+
+
 
   def next_batch(self, X, Y, batch_size):
     for i in np.arange(0, X.shape[0], batch_size):
@@ -58,19 +61,20 @@ class neural_net:
     print("The size of the output layer is:  = " + str(self.output_unit))    
 
   
-  def initialize_parameters(self, input_unit, hidden_unit, output_unit, value):
-    w1 = np.random.randn(hidden_unit, input_unit)* 0.01
-    w2 = np.random.randn(output_unit, hidden_unit)* 0.01
-    b1 = np.zeros((hidden_unit, 1))
-    b2 = np.zeros((output_unit, 1))
-    self.parameters = {"W1": w1,
-                  "b1": b1,
-                  "W2": w2,
-                  "b2": b2}
+  def initialize_parameters(self, input_unit, hidden_unit, output_unit):
+    self.W1 = np.random.randn(hidden_unit, input_unit)* 0.01
+    self.W2 = np.random.randn(output_unit, hidden_unit)* 0.01
+    self.b1 = np.zeros((hidden_unit, 1))
+    self.b2 = np.zeros((output_unit, 1))
+    self.parameters = {"W1": self.W1,
+                       "b1": self.b1,
+                       "W2": self.W2,
+                       "b2": self.b2}
 
 
   def sigmoid(self, z):
     return 1/(1+ np.exp(-z))
+
 
   def forward_prop(self, X, params, pred, output_actvn=None):
     W1 = params['W1']
@@ -78,9 +82,10 @@ class neural_net:
     W2 = params['W2']
     b2 = params['b2']
     
-    Z1 = np.dot(W1, X) + b1
+    Z1 = np.add(np.dot(W1, X), b1)
     A1 = np.tanh(Z1)
-    Z2 = np.dot(W2, A1) + b2
+    Z2 = np.add(np.dot(W2, A1), b2)
+
     if (output_actvn == "linear"):
       A2 = Z2
     elif (output_actvn == "tanh"):
@@ -94,14 +99,8 @@ class neural_net:
     return A2, cache
 
 
-  def cross_entropy_cost(self, A2, Y, parameters):
-    logprobs = np.multiply(np.log(A2), Y) + np.multiply((1-Y), np.log(1 - A2))
-    cost = -np.sum(logprobs)/self.m
-    self.cost = float(np.squeeze(cost))
-
-
-  def least_squares_error(self, A2, X, Y):
-    N = X.shape[1]
+  def least_squares_error(self, A2, Y):
+    N = Y.shape[1]
     error = np.sum((A2 - Y)**2)
     error  = error/(4 * N)
     self.cost = float(np.squeeze(error))
@@ -113,15 +112,15 @@ class neural_net:
     W2 = params['W2']
     A1 = cache['A1']
     A2 = cache['A2']
-    
-    dZ2 = A2 - Y
-    dW2 = (1/m) * np.dot(dZ2, A1.T)
-    db2 = (1/m) * np.sum(dZ2, axis=1, keepdims=True)
-    dZ1 = np.multiply(np.dot(W2.T, dZ2), 1 - np.power(A1,2))
-    dW1 = (1/m) * np.dot(dZ1, X.T)
-    db1 = (1/m) * np.sum(dZ1, axis=1, keepdims=True)
 
-    self.grads = {"dW1": dW1, "db1": db1, "dW2": dW2,"db2": db2}
+    self.dZ2 = A2 - Y
+    self.dW2 = (1/m) * np.dot(self.dZ2, A1.T)
+    self.db2 = (1/m) * np.sum(self.dZ2, axis=1, keepdims=True)
+    self.dZ1 = np.multiply(np.dot(W2.T, self.dZ2), 1 - np.power(A1, 2))
+    self.dW1 = (1/m) * np.dot(self.dZ1, X.T)
+    self.db1 = (1/m) * np.sum(self.dZ1, axis=1, keepdims=True)
+
+    self.grads = {"dW1": self.dW1, "db1": self.db1, "dW2": self.dW2,"db2": self.db2}
     
   def gradient_descent(self, params, grads, lr = 0.01):
     #TODO: switch this to variable gradient descent
@@ -135,12 +134,12 @@ class neural_net:
     dW2 = grads['dW2']
     db2 = grads['db2']
     
-    W1 = W1 - lr * dW1
-    b1 = b1 - lr * db1
-    W2 = W2 - lr * dW2
-    b2 = b2 - lr * db2
+    self.W1 = W1 - lr * dW1
+    self.b1 = b1 - lr * db1
+    self.W2 = W2 - lr * dW2
+    self.b2 = b2 - lr * db2
     
-    self.parameters = {"W1": W1, "b1": b1,"W2": W2,"b2": b2}
+    self.parameters = {"W1": self.W1, "b1": self.b1,"W2": self.W2,"b2": self.b2}
 
   def adapt_gradient(self, grads):
     self.dW1 += grads['dW1']
@@ -161,7 +160,6 @@ class neural_net:
     self.b2 -= (lr / np.sqrt(self.vb2) + eps) * self.db2
     
     self.parameters = {"W1": self.W1, "b1": self.b1,"W2": self.W2,"b2": self.b2}
-
 
 
   def prediction(self, parameters, X):
@@ -194,50 +192,94 @@ class neural_net:
     plt.title('Neural Networks Plot')
     plt.xlabel('iterations')
     plt.ylabel('E_in')
+    #plt.show()
+
+
+  def analyse_data(self, data):
+    digit1, digitNot1 = [], []
+    for i in range(len(data[:,0])):
+      if data[i][0] == 1:
+        digit1.append([data[i][1], data[i][2]])
+      else:
+        digitNot1.append([data[i][1], data[i][2]])
+    return digit1, digitNot1
+  
+  
+  def check_predictions(self, pred):
+    x1true, x2true = [], []
+    x1false, x2false = [], []
+
+    # defnining a mesh over the entire domain
+    for i in np.arange(-1, 1.02, 0.02):
+      for j in np.arange(-1, 1.02, 0.02):
+        val = self.prediction(self.parameters, np.array([[i, j],]).T)
+        if val[0,0] == 1:
+          x1true.append(i)
+          x2true.append(j)
+        else:
+          x1false.append(i)
+          x2false.append(j)
+    return (x1true, x2true, x1false, x2false)
+  
+  
+  def plot_decision(self, digit1, digitNot1, xparams):
+    x1true, x2true, x1false, x2false = xparams
+    plt.scatter(x1true, x2true, s = 12, label = 'h(x) == 1')
+    plt.scatter(x1false, x2false, s = 12, label = 'h(x) != 1')
+    print(np.array(digit1).shape)
+    print(np.array(digitNot1).shape)
+    plt.scatter([digit1[i][0] for i in range(len(digit1))], [digit1[i][1] for i in range(len(digit1))], s = 12, c = '', edgecolor = 'blue', marker = 'o', label = 'digit 1')
+    plt.scatter([digitNot1[i][0] for i in range(len(digitNot1))], [digitNot1[i][1] for i in range(len(digitNot1))], s = 12, c = 'red', marker = 'x', label = 'not digit 1')
+    plt.legend()
+    plt.xlabel('intensity')
+    plt.ylabel('symmetry')
     plt.show()
 
 
 def normalize(data_set):
-    # transfer feature one by one
     data_set = data_set.astype(np.float32)
     for i in range(1, len(data_set[0])):
         max1 = np.max(data_set[:,i])
         min1 = np.min(data_set[:,i])
-        diff = np.max(data_set[:,i]) + np.min(data_set[:,i])
         data_set[:,i] = 1.0*(data_set[:,i] - min1 - (max1-min1)/2) / ((max1-min1)/2)
     return data_set
 
 
 def data_process(files):
-    digit1, not_digit1 = [], []
+    digit = []
     for file in files:
         raw_data = np.loadtxt(file)
         data = raw_data[:, 1:]
-        # target_vector = raw_data[index, 0]
         for index in range(len(data)):
-            # print(index)
-            number = data[index].reshape((16, 16))
-            # cv2.imshow("test", number)
-            # cv2.waitKey(0)
-            # feature 1. whether vertical symmetric
-            number_flip = cv2.flip(number, 0)
-            # more count means more unsymmetrical
-            count = len(np.where(number != number_flip)[0])
-            # number_final = number_flip - number
+            symmetry = get_symmetry(data[index])
+            intensity = get_intensity(data[index])
+            digit.append([int(raw_data[index, 0]) == 1, intensity, symmetry])
+    digit = np.array(digit)
+    return digit
 
-            # this is feature for pixel range
-            # pixel_index = np.where(number > -1.0)[1]
-            # pixel_range = max(pixel_index) - min(pixel_index)
+def parsearr(arr):
+    newarr = np.zeros((16, 16))
+    for i in range(0, 16):
+        for j in range(0, 16):
+            newarr[i][j] = arr[i*16+j]
+    return newarr
 
-            intensity = len(np.where(number > -1.0)[0])
+def get_symmetry(digit):
+    arr = parsearr(digit)
 
-            digit1.append([int(raw_data[index, 0]) == 1, count, intensity])
-            # else:
-            #     digit1.append((0, count, pixel_range))
-    # not_digit1 = np.array(not_digit1)
-    digit1 = np.array(digit1)
-    return digit1 # , not_digit
+    symmetry = 0
+    for i in range(0,256,16):
+        for j in range(i, i+8):
+            if digit[j] == digit[2*i+15-j]:
+                symmetry += 1
+    return symmetry
 
+
+def get_intensity(digit):
+    intensity = 0
+    for i in digit:
+        intensity += i
+    return intensity/256
 
 
 
@@ -246,19 +288,19 @@ if __name__ == "__main__":
   train_file = "ZipDigits.train"
   test_file = "ZipDigits.test"
 
-  data_set = data_process([train_file,test_file])
+  data_set = data_process([train_file, test_file])
   data_set = normalize(data_set)
-  data_set[np.where(data_set[:,0]==1 ),0 ] = 1
-  data_set[np.where(data_set[:,0]==0 ),0 ] = -1
 
   m = 10 #number of hidden units in 1
-  epochs = 2000000  # number of iterations
+  epochs = 2000#0000  # number of iterations
 
   # Y values are the first index of the dataset 
-  neural_net(data_set, epochs, m, 0.25, "linear")
+  neural_net(data_set, epochs, m)#, "linear")
+
+######################## Question 2b ############################
 
 
-
+#  neural_net(data_set, epochs, m, "linear", 0.01)
 
 
 
